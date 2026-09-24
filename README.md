@@ -3,8 +3,10 @@
 Docházka na volejbalové tréninky s předplatným. Víc správců, všichni vidí stejná data živě.
 
 - **Technologie:** jeden HTML soubor (bez buildu) + Supabase (databáze, přihlášení e-mailem, živé změny)
-- **Hosting:** GitHub Pages (zatím nenasazeno)
-- **Stav:** 🚧 převod z Claude artefaktu na Supabase – kód hotový a otestovaný proti simulaci, čeká na napojení na skutečný Supabase projekt (2026-09-24)
+- **Aplikace:** https://vojtechkocour.github.io/volejbal-pokladna/
+- **Repozitář:** https://github.com/Vojtechkocour/volejbal-pokladna (veřejný – nic citlivého v něm není)
+- **Nasazení:** push do `main` → GitHub Pages se za 1–2 minuty aktualizuje
+- **Stav:** 🚧 nasazeno na GitHub Pages + Supabase (2026-09-24), čeká na první ostré přihlášení
 - **Původní verze (Claude artefakt):** `index-artifact.html`, https://claude.ai/artifact/VjPTvfvwMMbsLNVuiZ6K1V
 
 ## Funkce
