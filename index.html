@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Volejbalová pokladna</title>
+<!-- self-hosted: no third-party CDN can inject code or see visitors -->
+<script src="vendor/supabase.min.js"></script><!-- @supabase/supabase-js 2.117.1 -->
+<link rel="stylesheet" href="vendor/fonts.css">
+<style>
+:root{
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E7ECF4; --ink:#121A2B; --muted:#5A6479; --line:#D5DCE8;
+  --brand:#1D4F91; --brand-ink:#FFFFFF; --brand-soft:#DCE6F5; --ball:#F4B400; --ball-ink:#2A1F00;
+  --ok:#1C7A4B; --ok-soft:#DCF0E4; --warn:#9A5A00; --warn-soft:#FCEACB; --bad:#B83229; --bad-soft:#F8DDDA;
+  --shadow:0 1px 2px rgba(18,26,43,.06),0 4px 16px rgba(18,26,43,.06);
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --nav-h:60px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0D131E; --surface:#151D2C; --surface-2:#1E283B; --ink:#E7ECF5; --muted:#97A2B8; --line:#2A3650;
+    --brand:#6A9DE3; --brand-ink:#0A1220; --brand-soft:#1D3254; --ball:#F6C343; --ball-ink:#2A1F00;
+    --ok:#5DCB92; --ok-soft:#163525; --warn:#F0AA4C; --warn-soft:#3A2911; --bad:#F27D72; --bad-soft:#3F1C19;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D131E; --surface:#151D2C; --surface-2:#1E283B; --ink:#E7ECF5; --muted:#97A2B8; --line:#2A3650;
+  --brand:#6A9DE3; --brand-ink:#0A1220; --brand-soft:#1D3254; --ball:#F6C343; --ball-ink:#2A1F00;
+  --ok:#5DCB92; --ok-soft:#163525; --warn:#F0AA4C; --warn-soft:#3A2911; --bad:#F27D72; --bad-soft:#3F1C19;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;text-wrap:balance;margin:0}
+h2{font-size:24px}
+h3{font-size:19px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+:focus-visible{outline:2.5px solid var(--ball);outline-offset:2px}
+
+/* Header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-in{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;align-items:center;gap:10px}
+.logo{width:30px;height:30px;flex:none}
+.top h1{font-size:23px;line-height:1}
+.sync{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.sync.on i{background:var(--ok)}
+.sync.off i{background:var(--warn)}
+
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:16px calc(var(--nav-h) + 110px)}
+.view{display:flex;flex-direction:column;gap:14px}
+.banner{max-width:760px;margin:12px auto 0;padding-inline:16px}
+.banner div{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:500}
+.callout{background:var(--brand-soft);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;border:1.5px solid transparent;background:var(--brand);color:var(--brand-ink);font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn.small{min-height:36px;padding:0 12px;font-size:14px}
+.btn.danger{background:transparent;color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
+.btn.danger.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.icon-btn{width:44px;height:44px;flex:none;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer}
+.link{background:none;border:0;padding:6px 0;color:var(--brand);font-weight:600;cursor:pointer}
+
+/* Inputs */
+.field{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted);min-width:0}
+.input{min-height:44px;width:100%;min-width:0;padding:0 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-size:16px;font-weight:400}
+.input:focus{border-color:var(--brand);outline:none}
+.row-form{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.row-form .grow{flex:1 1 160px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+
+/* Training */
+.date-row{display:flex;gap:8px;align-items:center}
+.date-row .input{flex:1;font-weight:600;font-variant-numeric:tabular-nums}
+.date-label{font-family:var(--display);font-size:28px;font-weight:700;line-height:1.05;text-transform:capitalize}
+.date-sub{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface-2);padding:4px;border-radius:12px}
+.seg button{min-height:40px;border:0;border-radius:9px;background:transparent;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar .spacer{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:6px}
+.grid.off{opacity:.4;pointer-events:none}
+.tile{display:grid;grid-template-columns:1fr auto;gap:4px 4px;align-items:start;text-align:left;padding:8px;min-height:56px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s,border-color .12s,transform .08s}
+.tile:active{transform:scale(.97)}
+.tile .pill{font-size:12px;padding:1px 7px}
+.t-name{grid-column:1;font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.t-check{grid-column:2;grid-row:1/span 2;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center}
+.t-check svg{width:12px;height:12px}
+.t-check svg{opacity:0}
+.tile.sel{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.tile.sel .t-check{background:var(--ball);border-color:var(--ball);color:var(--ball-ink)}
+.tile.sel .t-check svg{opacity:1}
+.pill{display:inline-block;justify-self:start;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutral{background:var(--surface-2);color:var(--muted)}
+.empty{padding:22px 16px;text-align:center;color:var(--muted);background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;gap:10px;align-items:center}
+
+/* Save bar */
+.savebar{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));z-index:15;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(18,26,43,.08)}
+.savebar-in{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;align-items:center;gap:12px}
+.sb-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.sb-main{font-weight:700;font-variant-numeric:tabular-nums}
+.sb-warn{font-size:13px;color:var(--warn);font-weight:600}
+
+/* Nav */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:16;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs-in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs button{height:var(--nav-h);border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tabs button svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--brand)}
+
+/* Lists */
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;width:100%;cursor:pointer}
+.item:first-child{border-top:0}
+.item.static{cursor:default}
+.avatar{width:38px;height:38px;flex:none;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:17px}
+.i-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.i-name{font-weight:600;overflow-wrap:anywhere}
+.i-sub{font-size:13px;color:var(--muted)}
+.tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:5px;background:var(--surface-2);color:var(--muted);margin-left:6px;vertical-align:2px}
+.check{display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--brand)}
+
+/* Card */
+.card-head{display:flex;align-items:center;gap:14px}
+.card-head .avatar{width:56px;height:56px;font-size:24px}
+.card-head h2{font-size:30px;overflow-wrap:anywhere}
+.balance{display:flex;flex-direction:column;gap:4px}
+.big{font-family:var(--display);font-size:46px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.big.ok{color:var(--ok)} .big.warn{color:var(--warn)} .big.bad{color:var(--bad)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.fact{background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.fact b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.fact span{font-size:12px;color:var(--muted)}
+.hist .amt{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.hist .amt.plus{color:var(--ok)} .hist .amt.minus{color:var(--ink)} .hist .amt.zero{color:var(--muted)}
+.hist .run{font-size:12px;color:var(--muted);font-weight:500}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.dot.pay{background:var(--ok)} .dot.tr{background:var(--brand)} .dot.free{background:var(--ball)}
+.x-btn{border:0;background:none;color:var(--muted);font-size:13px;font-weight:600;padding:6px;cursor:pointer;white-space:nowrap}
+.x-btn.armed{color:var(--bad)}
+
+/* Overview */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat .val{font-family:var(--display);font-size:34px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat .val.bad{color:var(--bad)}
+.stat .sub{font-size:13px;color:var(--muted)}
+.meter{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--brand);border-radius:4px}
+.status{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px}
+.status.free{background:color-mix(in srgb,var(--ball) 25%,transparent);color:var(--ink)}
+.status.cancelled{background:var(--bad-soft);color:var(--bad)}
+
+/* Settings */
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{position:relative}
+.day input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.day span{display:grid;place-items:center;min-height:44px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-weight:700}
+.day input:checked + span{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.day input:focus-visible + span{outline:2.5px solid var(--ball);outline-offset:2px}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(10px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:30;max-width:calc(100% - 32px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.gate{max-width:440px;margin:24px auto 0;width:100%}
+.gate p{margin:0}
+.msg-ok{color:var(--ok);font-weight:600}
+.msg-bad{color:var(--bad);font-weight:600}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="var(--ball)"/>
+      <path d="M16 2c-2 6-1 12 4 16M30 16c-6-2-12 0-15 5M6 26c4-4 5-11 1-17" fill="none" stroke="var(--brand)" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="16" cy="16" r="14" fill="none" stroke="var(--brand)" stroke-width="2.2"/>
+    </svg>
+    <h1>Volejbalová pokladna</h1>
+    <div class="sync" id="sync"><i></i><span>Načítám…</span></div>
+  </div>
+</header>
+<div class="banner" id="banner" hidden><div id="bannerText"></div></div>
+
+<main class="wrap">
+  <!-- PŘIHLÁŠENÍ -->
+  <section class="view" id="view-login" hidden>
+    <form class="panel gate" id="loginForm">
+      <h2>Přihlášení</h2>
+      <p class="small muted">Pokladna je jen pro správce. Jméno a heslo ti dá správce pokladny.</p>
+      <label class="field">Jméno
+        <input class="input" id="loginName" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+      </label>
+      <label class="field">Heslo
+        <input class="input" id="loginPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <div><button class="btn" type="submit" id="loginBtn">Přihlásit se</button></div>
+      <p class="small" id="loginMsg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <!-- BEZ PŘÍSTUPU -->
+  <section class="view" id="view-denied" hidden>
+    <div class="panel gate">
+      <h2>Bez přístupu</h2>
+      <p id="deniedText"></p>
+      <p class="small muted">Požádej správce pokladny, aby ti přístup povolil.</p>
+      <div><button class="btn ghost" type="button" data-logout>Odhlásit se</button></div>
+    </div>
+  </section>
+
+  <!-- TRÉNINK -->
+  <section class="view" id="view-trenink">
+    <div class="callout" id="tNoPrice" hidden>
+      <span>Nejdřív nastav cenu jednoho tréninku, ať se dá počítat, kolik komu zbývá.</span>
+      <button class="btn small" data-go="nastaveni">Nastavit cenu</button>
+    </div>
+    <div class="date-row">
+      <button class="icon-btn" id="dPrev" aria-label="Předchozí trénink"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <input class="input" type="date" id="tDate" aria-label="Datum tréninku">
+      <button class="icon-btn" id="dNext" aria-label="Další trénink"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div>
+      <div class="date-label" id="tDateLabel"></div>
+      <div class="date-sub small muted" id="tDateSub"></div>
+    </div>
+    <div class="seg" id="tStatus" role="group" aria-label="Typ tréninku">
+      <button type="button" data-status="normal">Normální</button>
+      <button type="button" data-status="free">Zdarma</button>
+      <button type="button" data-status="cancelled">Zrušený</button>
+    </div>
+    <div class="small muted" id="tPriceInfo"></div>
+    <div class="toolbar" id="tTools">
+      <button class="btn ghost small" id="tAll">Označit všechny</button>
+      <button class="btn ghost small" id="tNone">Zrušit výběr</button>
+    </div>
+    <div class="grid" id="tGrid"></div>
+    <label class="field">Poznámka k tréninku
+      <input class="input" id="tNote" placeholder="např. hala B, přátelák" maxlength="200">
+    </label>
+    <div><button class="btn danger small" id="tDelete" hidden>Smazat tento trénink</button></div>
+  </section>
+
+  <!-- HRÁČI -->
+  <section class="view" id="view-hraci" hidden>
+    <form class="row-form" id="addPlayer">
+      <label class="field grow">Nový hráč
+        <input class="input" id="newName" placeholder="Jméno a příjmení" maxlength="80" autocomplete="off">
+      </label>
+      <button class="btn" type="submit">Přidat</button>
+    </form>
+    <div class="toolbar">
+      <input class="input" id="pSearch" type="search" placeholder="Hledat hráče" style="flex:1 1 160px">
+      <select class="input" id="pSort" style="flex:0 1 190px" aria-label="Řazení">
+        <option value="name">Podle jména</option>
+        <option value="balance">Podle zůstatku</option>
+        <option value="count">Podle docházky</option>
+      </select>
+    </div>
+    <div class="small muted" id="pCount"></div>
+    <div id="pList"></div>
+    <label class="check small"><input type="checkbox" id="pArchived"> Zobrazit archivované hráče</label>
+  </section>
+
+  <!-- KARTA HRÁČE -->
+  <section class="view" id="view-karta" hidden>
+    <div><button class="link" id="cBack">‹ Zpět na hráče</button></div>
+    <div class="card-head" id="cHead"></div>
+    <div class="panel">
+      <div class="balance" id="cBalance"></div>
+      <div class="facts" id="cFacts"></div>
+    </div>
+    <form class="panel" id="cPay">
+      <h3>Přidat platbu</h3>
+      <div class="row-form">
+        <label class="field grow">Částka (Kč)
+          <input class="input num" id="cPayAmount" type="number" inputmode="decimal" step="any" required>
+        </label>
+        <label class="field grow">Datum
+          <input class="input" id="cPayDate" type="date" required>
+        </label>
+      </div>
+      <label class="field">Poznámka
+        <input class="input" id="cPayNote" placeholder="např. hotově, převodem" maxlength="120">
+      </label>
+      <div class="small muted">Vrácení peněz zadej jako zápornou částku.</div>
+      <div><button class="btn" type="submit">Uložit platbu</button></div>
+    </form>
+    <h3>Historie</h3>
+    <div id="cHistory"></div>
+    <div class="panel">
+      <h3>Úpravy hráče</h3>
+      <form class="row-form" id="cRename">
+        <label class="field grow">Jméno
+          <input class="input" id="cName" maxlength="80" required>
+        </label>
+        <button class="btn ghost" type="submit">Přejmenovat</button>
+      </form>
+      <div class="toolbar">
+        <button class="btn ghost small" id="cArchive" type="button"></button>
+        <button class="btn danger small" id="cDelete" type="button">Smazat hráče</button>
+      </div>
+      <div class="small muted" id="cDeleteHint"></div>
+    </div>
+  </section>
+
+  <!-- PŘEHLED -->
+  <section class="view" id="view-prehled" hidden>
+    <div class="stats" id="oStats"></div>
+    <h2>Kdo dluží nebo dochází kredit</h2>
+    <div id="oDebt"></div>
+    <h2>Tréninky</h2>
+    <div id="oTrainings"></div>
+  </section>
+
+  <!-- NASTAVENÍ -->
+  <section class="view" id="view-nastaveni" hidden>
+    <div class="panel">
+      <h3>Ceník tréninku</h3>
+      <div class="small muted">Každá cena platí od zadaného data až do další změny. Když cenu přidáš nebo smažeš, zůstatky se přepočítají u všech tréninků od toho data.</div>
+      <div id="sPrices"></div>
+      <form class="row-form" id="addPrice">
+        <label class="field grow">Platí od
+          <input class="input" id="npFrom" type="date" required>
+        </label>
+        <label class="field grow">Cena za trénink (Kč)
+          <input class="input num" id="npPrice" type="number" min="0" step="any" inputmode="decimal" required>
+        </label>
+        <button class="btn" type="submit">Přidat cenu</button>
+      </form>
+    </div>
+    <div class="panel">
+      <h3>Předplatné</h3>
+      <label class="field">Výchozí částka platby (Kč)
+        <input class="input num" id="sDefault" type="number" min="0" step="any" inputmode="decimal">
+      </label>
+      <div class="small muted">Předvyplní se, když hráči zapisuješ novou platbu.</div>
+    </div>
+    <div class="panel">
+      <h3>Dny tréninků</h3>
+      <div class="small muted">Podle nich se na záložce Trénink předvybere nejbližší tréninkový den a šipky skáčou jen po nich.</div>
+      <div class="days" id="sDays"></div>
+    </div>
+    <div class="panel">
+      <h3>Účet</h3>
+      <div class="small" id="sAccount"></div>
+      <div><button class="btn ghost small" type="button" data-logout>Odhlásit se</button></div>
+    </div>
+  </section>
+</main>
+
+<div class="savebar" id="saveBar" hidden>
+  <div class="savebar-in">
+    <div class="sb-text">
+      <span class="sb-main" id="sbMain"></span>
+      <span class="sb-warn" id="sbWarn"></span>
+    </div>
+    <button class="btn" id="sbSave">Uložit trénink</button>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Hlavní menu">
+  <div class="tabs-in">
+    <button data-view="trenink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/></svg>Trénink</button>
+    <button data-view="hraci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>Hráči</button>
+    <button data-view="prehled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Přehled</button>
+    <button data-view="nastaveni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Nastavení</button>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+// Supabase project (Project Settings → API). The anon key is public by design:
+// access is enforced by row level security in supabase/schema.sql.
+const SUPABASE_URL = 'https://pgazfwddytjfbaodoxzw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_m70DpK4xJkHCTNXIYQU8YQ_7F4QPEKd';
+const TABLES = ['players','trainings','payments','settings'];
+// Supabase accounts are e-mail based; plain usernames get this reserved,
+// never-delivering domain appended (tomas → tomas@volejbal.example).
+const LOGIN_DOMAIN = 'volejbal.example';
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const CHECK = '<svg width="14" height="14" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const DAYS = [[1,'Po'],[2,'Út'],[3,'St'],[4,'Čt'],[5,'Pá'],[6,'So'],[0,'Ne']];
+
+const S = {
+  players:new Map(), trainings:new Map(), payments:new Map(),
+  settings:defaults(), loaded:{players:false,trainings:false,payments:false,settings:false},
+  mode:'connecting', readOnly:false, view:'trenink', cardId:null, date:null,
+  drafts:new Map(), showArchived:false, search:'', sort:'name',
+  email:null, role:null, live:null
+};
+let sb = null;
+
+function defaults(){ return {prices:[], defaultPayment:1000, weekdays:[]}; }
+function normSettings(d){
+  d = d || {};
+  return {
+    prices: Array.isArray(d.prices) ? d.prices.filter(p=>p && typeof p.from==='string' && isFinite(Number(p.price))).map(p=>({from:p.from, price:Number(p.price)})) : [],
+    defaultPayment: isFinite(Number(d.defaultPayment)) ? Number(d.defaultPayment) : 1000,
+    weekdays: Array.isArray(d.weekdays) ? d.weekdays.map(Number).filter(n=>n>=0&&n<=6) : []
+  };
+}
+
+/* ---------- helpers ---------- */
+const pad = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today = () => iso(new Date());
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays = (s,n) => { const d = parse(s); d.setDate(d.getDate()+n); return iso(d); };
+const fmtDate = s => parse(s).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'});
+const fmtShort = s => parse(s).toLocaleDateString('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'});
+const fmtLong = s => parse(s).toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const nf = new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:2});
+const money = n => nf.format(Math.round(n*100)/100)+' Kč';
+const signed = n => (n>0?'+':n<0?'−':'')+money(Math.abs(n));
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const plural = (n,a,b,c) => n===1?a:(n>=2&&n<=4?b:c);
+const initials = name => name.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+const genId = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const byName = (a,b) => a.name.localeCompare(b.name,'cs');
+const nameParts = n => n.trim().split(/\s+/);
+const shortName = n => { const w = nameParts(n); return w.length<2 ? n.trim() : w[0][0].toUpperCase()+'. '+w.slice(1).join(' '); };
+const surname = n => { const w = nameParts(n); return w.length<2 ? w[0] : w.slice(1).join(' '); };
+const bySurname = (a,b) => surname(a.name).localeCompare(surname(b.name),'cs') || byName(a,b);
+
+function priceAt(date){
+  let r = null;
+  for (const p of [...S.settings.prices].sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:0)) if (p.from <= date) r = p;
+  return r;
+}
+function chargeOf(t){ return t.status==='normal' ? (priceAt(t.date)?.price || 0) : 0; }
+function level(balance){
+  const p = priceAt(today())?.price || 0;
+  if (balance < 0) return 'bad';
+  if (balance < p || (p===0 && balance===0)) return 'warn';
+  return 'ok';
+}
+
+function compute(){
+  const m = new Map();
+  for (const p of S.players.values()) m.set(p.id,{paid:0,spent:0,count:0,first:null,last:null,balance:0});
+  for (const pay of S.payments.values()){ const e = m.get(pay.playerId); if (e) e.paid += Number(pay.amount)||0; }
+  for (const t of S.trainings.values()){
+    if (t.status==='cancelled') continue;
+    const c = chargeOf(t);
+    for (const id of t.attendees||[]){
+      const e = m.get(id); if (!e) continue;
+      e.spent += c; e.count++;
+      if (!e.first || t.date < e.first) e.first = t.date;
+      if (!e.last || t.date > e.last) e.last = t.date;
+    }
+  }
+  for (const e of m.values()) e.balance = e.paid - e.spent;
+  return m;
+}
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'),2400);
+}
+function arm(btn, label, fn){
+  if (btn.dataset.armed){ delete btn.dataset.armed; btn.classList.remove('armed'); fn(); return; }
+  const orig = btn.textContent; btn.dataset.armed='1'; btn.classList.add('armed'); btn.textContent = label;
+  setTimeout(()=>{ if (btn.dataset.armed){ delete btn.dataset.armed; btn.classList.remove('armed'); btn.textContent = orig; } },4000);
+}
+
+/* ---------- data layer ---------- */
+function applyLocal(col,id,data){
+  if (col==='settings'){ if (id==='main') S.settings = normSettings(data); }
+  else if (data===null) S[col].delete(id);
+  else S[col].set(id,Object.assign({id},data));
+}
+async function put(col,id,data){
+  if (S.readOnly){ toast('Máš jen oprávnění ke čtení.'); return false; }
+  try{
+    if (sb){ const {error} = await sb.from(col).upsert({id, data}); if (error) return fail(error); }
+    applyLocal(col,id,data); render(); return true;
+  }catch(e){ return fail(e); }
+}
+async function del(col,id){
+  if (S.readOnly){ toast('Máš jen oprávnění ke čtení.'); return false; }
+  try{
+    if (sb){ const {error} = await sb.from(col).delete().eq('id',id); if (error) return fail(error); }
+    applyLocal(col,id,null); render(); return true;
+  }catch(e){ return fail(e); }
+}
+function fail(e){
+  const code = e && e.code;
+  if (code==='42501'){ S.readOnly = true; render(); toast('Nemáš oprávnění ukládat změny.'); }
+  else if (code==='PGRST301' || code==='PGRST303') toast('Přihlášení vypršelo. Obnov stránku.');
+  else toast('Uložení se nepovedlo. Zkontroluj připojení a zkus to znovu.');
+  return false;
+}
+
+/* ---------- supabase: load + live updates ---------- */
+async function fetchAll(table){
+  const rows = [];
+  for (let from = 0; ; from += 1000){
+    const {data, error} = await sb.from(table).select('id,data').order('id').range(from, from+999);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < 1000) return rows;
+  }
+}
+async function loadAll(){
+  try{
+    const [players, trainings, payments, settings] = await Promise.all(TABLES.map(fetchAll));
+    const toMap = rows => new Map(rows.map(r=>[r.id, Object.assign({id:r.id}, r.data)]));
+    S.players = toMap(players); S.trainings = toMap(trainings); S.payments = toMap(payments);
+    S.settings = normSettings(settings.find(r=>r.id==='main')?.data);
+    const first = !allLoaded();
+    for (const k in S.loaded) S.loaded[k] = true;
+    refreshCleanDrafts();
+    if (first) S.date = pickStartDate();
+    render();
+  }catch(e){ S.mode = 'broken'; render(); }
+}
+let channel = null;
+function startLive(){
+  channel = sb.channel('pokladna');
+  for (const t of TABLES) channel.on('postgres_changes', {event:'*', schema:'public', table:t}, onChange);
+  channel.subscribe(status=>{
+    if (status==='SUBSCRIBED'){
+      const reconnected = S.live===false; S.live = true;
+      if (reconnected) loadAll(); else render();
+    } else if (status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){
+      S.live = false; render();
+    }
+  });
+}
+function stopLive(){
+  if (channel){ sb.removeChannel(channel); channel = null; }
+  S.live = null;
+}
+function onChange(p){
+  if (!allLoaded()) return;
+  if (p.eventType==='DELETE') applyLocal(p.table, p.old.id, null);
+  else applyLocal(p.table, p.new.id, p.new.data);
+  if (p.table==='trainings') refreshCleanDrafts();
+  render();
+}
+function resetData(){
+  S.players = new Map(); S.trainings = new Map(); S.payments = new Map();
+  S.settings = defaults(); S.drafts.clear();
+  for (const k in S.loaded) S.loaded[k] = false;
+  // hidden views would otherwise keep the previous user's data in the DOM
+  for (const sel of ['#tGrid','#pList','#cHead','#cBalance','#cFacts','#cHistory','#oStats','#oDebt','#oTrainings','#sPrices']) $(sel).innerHTML = '';
+}
+
+/* ---------- drafts (training selection) ---------- */
+function fromSaved(date){
+  const t = S.trainings.get(date);
+  return {status:t?.status||'normal', attendees:new Set(t?.attendees||[]), note:t?.note||'', dirty:false};
+}
+function draft(){ if (!S.drafts.has(S.date)) S.drafts.set(S.date, fromSaved(S.date)); return S.drafts.get(S.date); }
+function refreshCleanDrafts(){ for (const [k,d] of S.drafts) if (!d.dirty) S.drafts.delete(k); }
+
+function isTrainingDay(s){ return S.settings.weekdays.includes(parse(s).getDay()); }
+function defaultDate(){
+  const t = today();
+  if (!S.settings.weekdays.length) return t;
+  for (let i=0;i<7;i++){ const d = addDays(t,-i); if (isTrainingDay(d)) return d; }
+  return t;
+}
+function step(dir){
+  let d = S.date;
+  if (!S.settings.weekdays.length) return addDays(d,dir);
+  for (let i=0;i<14;i++){ d = addDays(d,dir); if (isTrainingDay(d)) return d; }
+  return addDays(S.date,dir);
+}
+
+/* ---------- render ---------- */
+function render(){
+  const stats = compute();
+  renderChrome();
+  if (S.view==='trenink') renderTraining(stats);
+  if (S.view==='hraci') renderPlayers(stats);
+  if (S.view==='karta') renderCard(stats);
+  if (S.view==='prehled') renderOverview(stats);
+  if (S.view==='nastaveni') renderSettings();
+  renderSaveBar(stats);
+}
+function allLoaded(){ return Object.values(S.loaded).every(Boolean); }
+
+function gateView(){ return S.mode==='login' ? 'login' : S.mode==='denied' ? 'denied' : null; }
+function renderChrome(){
+  const gate = gateView(); const view = gate || S.view;
+  for (const v of ['login','denied','trenink','hraci','karta','prehled','nastaveni']) $('#view-'+v).hidden = view!==v;
+  $('#tabs').hidden = !!gate || S.mode==='connecting';
+  const tab = S.view==='karta' ? 'hraci' : S.view;
+  $$('.tabs button').forEach(b => b.toggleAttribute('aria-current', false) || (b.dataset.view===tab && b.setAttribute('aria-current','page')));
+  const sync = $('#sync');
+  const online = S.mode==='db' && allLoaded() && S.live!==false;
+  sync.className = 'sync ' + (online ? 'on' : (S.mode==='local' || S.mode==='broken' || S.live===false) ? 'off' : '');
+  sync.querySelector('span').textContent =
+    S.mode==='db' ? (!allLoaded() ? 'Načítám…' : S.live===false ? 'Obnovuji spojení…' : 'Online') :
+    S.mode==='local' ? 'Náhled' : S.mode==='broken' ? 'Offline' : gate ? '' : 'Připojuji…';
+  sync.hidden = !!gate;
+  let msg = '';
+  if (S.mode==='local') msg = 'Aplikace není napojená na databázi (chybí nastavení Supabase). Data se nikam neukládají.';
+  else if (S.mode==='broken') msg = 'Nepodařilo se načíst data. Zkontroluj připojení a obnov stránku.';
+  else if (S.mode==='db' && S.readOnly) msg = 'Máš jen oprávnění ke čtení. O možnost upravovat požádej správce.';
+  $('#banner').hidden = !msg; $('#bannerText').textContent = msg;
+  document.body.classList.toggle('ro', S.readOnly);
+  $$('#addPlayer, #cPay, #cRename, #addPrice').forEach(f=>f.hidden = S.readOnly);
+  $('#deniedText').textContent = 'Účet '+(accountName(S.email)||'')+' nemá do pokladny přístup.';
+  $('#sAccount').textContent = S.email
+    ? 'Přihlášen(a) jako '+accountName(S.email)+' · '+(S.role==='admin' ? 'správce (může upravovat)' : 'jen čtení')
+    : 'Nepřihlášen(a)';
+  $$('[data-logout]').forEach(b=>b.hidden = !S.email);
+}
+
+function renderTraining(stats){
+  const d = draft(); const saved = S.trainings.get(S.date);
+  $('#tNoPrice').hidden = !(allLoaded() && S.settings.prices.length===0);
+  if ($('#tDate').value !== S.date) $('#tDate').value = S.date;
+  $('#tDateLabel').textContent = fmtLong(S.date);
+  const sub = [];
+  sub.push(saved ? (d.dirty ? 'Uložený trénink · neuložené změny' : 'Uložený trénink') : (d.dirty ? 'Nový trénink · zatím neuložený' : 'Zatím nezapsaný trénink'));
+  if (S.date===today()) sub.push('dnes');
+  if (S.settings.weekdays.length && !isTrainingDay(S.date)) sub.push('mimo běžné dny tréninků');
+  $('#tDateSub').textContent = sub.join(' · ');
+  $$('#tStatus button').forEach(b=>{ b.setAttribute('aria-pressed', String(b.dataset.status===d.status)); b.disabled = S.readOnly; });
+  const pr = priceAt(S.date);
+  $('#tPriceInfo').textContent =
+    d.status==='cancelled' ? 'Zrušený trénink: nikdo se nezapisuje a nikomu se nic neodečte.' :
+    d.status==='free' ? 'Trénink zdarma: docházka se zapíše, ale nic se neodečte.' :
+    pr ? 'Cena ' + money(pr.price) + ' za hráče (podle ceníku od ' + fmtDate(pr.from) + ').' :
+    'Pro toto datum není nastavená cena, takže se nic neodečte. Doplň ji v Nastavení.';
+  $('#tTools').hidden = S.readOnly || d.status==='cancelled';
+  const grid = $('#tGrid');
+  grid.classList.toggle('off', d.status==='cancelled');
+  if (!allLoaded()){ grid.innerHTML = '<div class="empty">Načítám hráče…</div>'; return; }
+  const list = [...S.players.values()].filter(p => p.active!==false || d.attendees.has(p.id)).sort(bySurname);
+  const shorts = new Map(list.map(p=>[p.id,shortName(p.name)]));
+  const seen = {}; for (const s of shorts.values()) seen[s] = (seen[s]||0)+1;
+  if (!list.length){
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Zatím tu nejsou žádní hráči.<button class="btn small" data-go="hraci">Přidat hráče</button></div>';
+  } else {
+    grid.innerHTML = list.map(p=>{
+      const e = stats.get(p.id); const sel = d.attendees.has(p.id) && d.status!=='cancelled';
+      return '<button class="tile'+(sel?' sel':'')+'" data-id="'+esc(p.id)+'" aria-pressed="'+sel+'"'+(S.readOnly?' disabled':'')+'>'
+        +'<span class="t-name" title="'+esc(p.name)+'">'+esc(seen[shorts.get(p.id)]>1 ? p.name : shorts.get(p.id))+'</span>'
+        +'<span class="t-check">'+CHECK+'</span>'
+        +'<span class="pill '+level(e.balance)+'">'+money(e.balance)+'</span></button>';
+    }).join('');
+  }
+  const note = $('#tNote'); if (document.activeElement!==note) note.value = d.note;
+  note.disabled = S.readOnly;
+  $('#tDelete').hidden = !saved || S.readOnly;
+}
+
+function renderSaveBar(stats){
+  const bar = $('#saveBar');
+  const show = S.view==='trenink' && !S.readOnly && allLoaded() && S.players.size>0;
+  bar.hidden = !show; if (!show) return;
+  const d = draft(); const saved = S.trainings.get(S.date);
+  const price = d.status==='normal' ? (priceAt(S.date)?.price||0) : 0;
+  const n = d.status==='cancelled' ? 0 : d.attendees.size;
+  $('#sbMain').textContent = d.status==='cancelled' ? 'Trénink zrušen'
+    : n+' '+plural(n,'hráč','hráči','hráčů')+(d.status==='free' ? ' · zdarma' : ' · '+money(n*price));
+  let neg = 0;
+  if (d.status==='normal' && price>0){
+    const prev = saved && saved.status==='normal' ? chargeOf(saved) : 0;
+    for (const id of d.attendees){
+      const e = stats.get(id); if (!e) continue;
+      const before = e.balance + (saved && saved.status==='normal' && (saved.attendees||[]).includes(id) ? prev : 0);
+      if (before - price < 0) neg++;
+    }
+  }
+  $('#sbWarn').textContent = neg ? neg+' '+plural(neg,'hráč půjde','hráči půjdou','hráčů půjde')+' do mínusu' : '';
+  const btn = $('#sbSave');
+  btn.textContent = saved ? (d.dirty ? 'Uložit změny' : 'Uloženo') : 'Uložit trénink';
+  btn.disabled = saved ? !d.dirty : (n===0 && d.status!=='cancelled');
+}
+
+function renderPlayers(stats){
+  const list = $('#pList');
+  if (!allLoaded()){ list.innerHTML = '<div class="empty">Načítám hráče…</div>'; $('#pCount').textContent=''; return; }
+  const q = norm(S.search);
+  let ps = [...S.players.values()].filter(p => (S.showArchived || p.active!==false) && (!q || norm(p.name).includes(q)));
+  if (S.sort==='balance') ps.sort((a,b)=>stats.get(a.id).balance - stats.get(b.id).balance || byName(a,b));
+  else if (S.sort==='count') ps.sort((a,b)=>stats.get(b.id).count - stats.get(a.id).count || byName(a,b));
+  else ps.sort(byName);
+  const active = [...S.players.values()].filter(p=>p.active!==false).length;
+  $('#pCount').textContent = active+' '+plural(active,'aktivní hráč','aktivní hráči','aktivních hráčů');
+  if (!ps.length){
+    list.innerHTML = '<div class="empty">'+(S.players.size ? 'Nikdo neodpovídá hledání.' : 'Zatím žádní hráči. Přidej prvního nahoře.')+'</div>';
+    return;
+  }
+  list.innerHTML = '<div class="list">'+ps.map(p=>{
+    const e = stats.get(p.id);
+    const sub = e.count ? e.count+'× na tréninku · naposledy '+fmtShort(e.last) : 'Zatím bez tréninku';
+    return '<button class="item" data-card="'+esc(p.id)+'"><span class="avatar">'+esc(initials(p.name))+'</span>'
+      +'<span class="i-main"><span class="i-name">'+esc(p.name)+(p.active===false?'<span class="tag">archiv</span>':'')+'</span><span class="i-sub">'+sub+'</span></span>'
+      +'<span class="pill '+level(e.balance)+'">'+money(e.balance)+'</span></button>';
+  }).join('')+'</div>';
+}
+
+function renderCard(stats){
+  const p = S.players.get(S.cardId);
+  if (!p){ setView('hraci'); return; }
+  const e = stats.get(p.id);
+  $('#cHead').innerHTML = '<span class="avatar">'+esc(initials(p.name))+'</span><div><h2>'+esc(p.name)+'</h2>'
+    +(p.active===false ? '<span class="tag" style="margin:0">archivovaný</span>' : '<span class="small muted">V týmu od '+fmtDate(p.createdAt||today())+'</span>')+'</div>';
+  const lv = level(e.balance); const cur = priceAt(today())?.price || 0;
+  let note = '';
+  if (e.balance < 0) note = 'Dluží '+money(-e.balance)+'. Je potřeba doplatit.';
+  else if (cur>0){ const k = Math.floor(e.balance/cur); note = k>0 ? 'Vystačí ještě na '+k+' '+plural(k,'trénink','tréninky','tréninků')+' (při ceně '+money(cur)+').' : 'Kredit nestačí na další trénink.'; }
+  $('#cBalance').innerHTML = '<span class="small muted" style="font-weight:600">Zůstatek</span><span class="big '+lv+'">'+money(e.balance)+'</span><span class="small">'+note+'</span>';
+  const since = [p.createdAt, e.first].filter(Boolean).sort()[0] || today();
+  const held = [...S.trainings.values()].filter(t=>t.status!=='cancelled' && t.date>=since).length;
+  const pct = held ? Math.round(e.count/held*100) : 0;
+  $('#cFacts').innerHTML =
+    '<div class="fact"><b>'+money(e.paid)+'</b><span>zaplaceno celkem</span></div>'
+    +'<div class="fact"><b>'+money(e.spent)+'</b><span>za tréninky</span></div>'
+    +'<div class="fact"><b>'+e.count+' z '+held+'</b><span>tréninků ('+pct+' %)</span></div>';
+  // history
+  const ev = [];
+  for (const pay of S.payments.values()) if (pay.playerId===p.id) ev.push({kind:'pay',date:pay.date,amount:Number(pay.amount)||0,note:pay.note,id:pay.id,ts:pay.createdAt||''});
+  for (const t of S.trainings.values()) if (t.status!=='cancelled' && (t.attendees||[]).includes(p.id)) ev.push({kind:t.status==='free'?'free':'tr',date:t.date,amount:-chargeOf(t),note:t.note,id:t.id,ts:''});
+  ev.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.kind==='pay'?-1:1));
+  let run = 0; for (const x of ev){ run += x.amount; x.run = run; }
+  ev.reverse();
+  const h = $('#cHistory');
+  if (!ev.length) h.innerHTML = '<div class="empty">Zatím žádné platby ani tréninky.</div>';
+  else h.innerHTML = '<div class="list hist">'+ev.map(x=>{
+    const title = x.kind==='pay' ? (x.amount<0?'Vrácení peněz':'Platba') : x.kind==='free' ? 'Trénink zdarma' : 'Trénink';
+    const cls = x.amount>0?'plus':x.amount<0?'minus':'zero';
+    const tag = x.kind==='pay' ? 'div' : 'button';
+    const attrs = x.kind==='pay' ? ' class="item static"' : ' class="item" data-train="'+esc(x.id)+'"';
+    return '<'+tag+attrs+'><span class="dot '+x.kind+'"></span><span class="i-main"><span class="i-name">'+title+'</span>'
+      +'<span class="i-sub">'+fmtShort(x.date)+(x.note?' · '+esc(x.note):'')+'</span></span>'
+      +'<span class="amt '+cls+'">'+(x.amount===0?'0 Kč':signed(x.amount))+'<br><span class="run">zůstatek '+money(x.run)+'</span></span>'
+      +(x.kind==='pay' && !S.readOnly ? '<button class="x-btn" data-delpay="'+esc(x.id)+'">Smazat</button>' : '')
+      +'</'+tag+'>';
+  }).join('')+'</div>';
+  const nm = $('#cName'); if (document.activeElement!==nm) nm.value = p.name;
+  $('#cArchive').textContent = p.active===false ? 'Vrátit do týmu' : 'Archivovat';
+  $('#cArchive').hidden = S.readOnly;
+  const hasHistory = ev.length>0;
+  $('#cDelete').hidden = S.readOnly || hasHistory;
+  $('#cDeleteHint').textContent = S.readOnly ? '' : hasHistory
+    ? 'Hráče s historií nejde smazat. Archivuj ho: zmizí z tréninků, ale historie a zůstatek zůstanou.'
+    : 'Archivovaný hráč se nezobrazuje při zapisování tréninku.';
+}
+
+function renderOverview(stats){
+  if (!allLoaded()){ $('#oStats').innerHTML = '<div class="empty" style="grid-column:1/-1">Načítám…</div>'; return; }
+  let bank = 0, debt = 0, debtors = 0;
+  for (const e of stats.values()){ bank += e.balance; if (e.balance<0){ debt += -e.balance; debtors++; } }
+  const held = [...S.trainings.values()].filter(t=>t.status!=='cancelled').sort((a,b)=>a.date<b.date?1:-1);
+  const month = today().slice(0,7);
+  const inMonth = held.filter(t=>t.date.startsWith(month)).length;
+  const avg = held.length ? held.reduce((s,t)=>s+(t.attendees||[]).length,0)/held.length : 0;
+  const paidAll = [...S.payments.values()].reduce((s,p)=>s+(Number(p.amount)||0),0);
+  $('#oStats').innerHTML =
+    '<div class="stat"><span class="lbl">V pokladně</span><span class="val">'+money(bank)+'</span><span class="sub">vybráno celkem '+money(paidAll)+'</span></div>'
+   +'<div class="stat"><span class="lbl">Dluhy</span><span class="val'+(debt?' bad':'')+'">'+money(debt)+'</span><span class="sub">'+debtors+' '+plural(debtors,'hráč','hráči','hráčů')+' v mínusu</span></div>'
+   +'<div class="stat"><span class="lbl">Tréninky</span><span class="val">'+held.length+'</span><span class="sub">tento měsíc '+inMonth+'</span></div>'
+   +'<div class="stat"><span class="lbl">Průměrná účast</span><span class="val">'+nf.format(Math.round(avg*10)/10)+'</span><span class="sub">hráčů na trénink</span></div>';
+  const cur = priceAt(today())?.price || 0;
+  const low = [...S.players.values()].filter(p=>p.active!==false || stats.get(p.id).balance<0)
+    .map(p=>({p,e:stats.get(p.id)})).filter(x=>x.e.balance<0 || (cur>0 && x.e.balance<cur))
+    .sort((a,b)=>a.e.balance-b.e.balance);
+  $('#oDebt').innerHTML = !low.length ? '<div class="empty">Všichni mají dost kreditu aspoň na jeden trénink.</div>'
+    : '<div class="list">'+low.map(({p,e})=>'<button class="item" data-card="'+esc(p.id)+'"><span class="avatar">'+esc(initials(p.name))+'</span><span class="i-main"><span class="i-name">'+esc(p.name)+'</span><span class="i-sub">'+(e.balance<0?'Dluží '+money(-e.balance):'Nestačí na další trénink')+'</span></span><span class="pill '+level(e.balance)+'">'+money(e.balance)+'</span></button>').join('')+'</div>';
+  const all = [...S.trainings.values()].sort((a,b)=>a.date<b.date?1:-1);
+  const max = Math.max(1,...all.map(t=>(t.attendees||[]).length));
+  $('#oTrainings').innerHTML = !all.length ? '<div class="empty">Zatím žádný zapsaný trénink.<button class="btn small" data-go="trenink">Zapsat trénink</button></div>'
+    : '<div class="list">'+all.map(t=>{
+      const n = (t.attendees||[]).length;
+      const st = t.status==='free' ? '<span class="status free">zdarma</span>' : t.status==='cancelled' ? '<span class="status cancelled">zrušeno</span>' : '';
+      const right = t.status==='cancelled' ? '' : '<span class="pill neutral">'+n+' '+plural(n,'hráč','hráči','hráčů')+'</span>';
+      return '<button class="item" data-train="'+esc(t.id)+'"><span class="i-main"><span class="i-name">'+esc(fmtShort(t.date))+' '+st+'</span>'
+        +(t.status==='cancelled' ? (t.note?'<span class="i-sub">'+esc(t.note)+'</span>':'') : '<span class="meter" aria-hidden="true"><i style="width:'+(n/max*100)+'%"></i></span>')
+        +'</span>'+right+'</button>';
+    }).join('')+'</div>';
+}
+
+function renderSettings(){
+  const cur = priceAt(today());
+  const ps = [...S.settings.prices].sort((a,b)=>a.from<b.from?1:-1);
+  $('#sPrices').innerHTML = !ps.length ? '<div class="empty">Zatím není nastavená žádná cena.</div>'
+    : '<div class="list">'+ps.map(p=>'<div class="item static"><span class="i-main"><span class="i-name">'+money(p.price)+' za trénink</span><span class="i-sub">platí od '+fmtDate(p.from)+(cur && cur.from===p.from?' · platí nyní':p.from>today()?' · budoucí změna':'')+'</span></span>'
+      +(S.readOnly?'':'<button class="x-btn" data-delprice="'+esc(p.from)+'">Smazat</button>')+'</div>').join('')+'</div>';
+  const inp = $('#sDefault'); if (document.activeElement!==inp) inp.value = S.settings.defaultPayment;
+  inp.disabled = S.readOnly;
+  $('#sDays').innerHTML = DAYS.map(([n,l])=>'<label class="day"><input type="checkbox" value="'+n+'"'+(S.settings.weekdays.includes(n)?' checked':'')+(S.readOnly?' disabled':'')+' aria-label="'+l+'"><span>'+l+'</span></label>').join('');
+  if (!$('#npFrom').value) $('#npFrom').value = today();
+}
+
+/* ---------- navigation ---------- */
+function setView(v){
+  S.view = v; if (v!=='karta') S.cardId = null;
+  if (v!=='karta') try{ history.replaceState(null,'','#'+v); }catch(_){}
+  render(); window.scrollTo(0,0);
+}
+function openCard(id){
+  S.cardId = id; S.view = 'karta';
+  $('#cPayAmount').value = S.settings.defaultPayment || '';
+  $('#cPayDate').value = today(); $('#cPayNote').value = '';
+  render(); window.scrollTo(0,0);
+}
+function openTraining(date){ S.date = date; setView('trenink'); }
+
+/* ---------- events ---------- */
+document.addEventListener('click', ev=>{
+  const go = ev.target.closest('[data-go]'); if (go){ setView(go.dataset.go); return; }
+  const tab = ev.target.closest('.tabs button'); if (tab){ setView(tab.dataset.view); return; }
+  const tile = ev.target.closest('.tile'); if (tile){
+    const d = draft(); const id = tile.dataset.id;
+    d.attendees.has(id) ? d.attendees.delete(id) : d.attendees.add(id); d.dirty = true; render(); return;
+  }
+  const dp = ev.target.closest('[data-delpay]'); if (dp){ ev.stopPropagation(); arm(dp,'Opravdu?',async()=>{ if (await del('payments',dp.dataset.delpay)) toast('Platba smazána'); }); return; }
+  const dpr = ev.target.closest('[data-delprice]'); if (dpr){ arm(dpr,'Opravdu?',async()=>{
+    const s = normSettings(S.settings); s.prices = s.prices.filter(p=>p.from!==dpr.dataset.delprice);
+    if (await put('settings','main',s)) toast('Cena smazána, zůstatky přepočítány'); }); return; }
+  const card = ev.target.closest('[data-card]'); if (card){ openCard(card.dataset.card); return; }
+  const tr = ev.target.closest('[data-train]'); if (tr){ openTraining(tr.dataset.train); return; }
+});
+$('#tStatus').addEventListener('click', ev=>{
+  const b = ev.target.closest('button'); if (!b) return;
+  const d = draft(); if (d.status!==b.dataset.status){ d.status = b.dataset.status; d.dirty = true; render(); }
+});
+$('#tAll').onclick = ()=>{ const d = draft(); for (const p of S.players.values()) if (p.active!==false) d.attendees.add(p.id); d.dirty = true; render(); };
+$('#tNone').onclick = ()=>{ const d = draft(); d.attendees.clear(); d.dirty = true; render(); };
+$('#tDate').addEventListener('change', e=>{ if (e.target.value){ S.date = e.target.value; render(); } });
+$('#dPrev').onclick = ()=>{ S.date = step(-1); render(); };
+$('#dNext').onclick = ()=>{ S.date = step(1); render(); };
+$('#tNote').addEventListener('input', e=>{ const d = draft(); d.note = e.target.value; d.dirty = true; renderSaveBar(compute()); });
+$('#sbSave').onclick = async ()=>{
+  const d = draft(); const date = S.date; const btn = $('#sbSave'); btn.disabled = true;
+  const doc = {date, status:d.status, attendees: d.status==='cancelled' ? [] : [...d.attendees], note:d.note.trim(), updatedAt:new Date().toISOString()};
+  if (await put('trainings',date,doc)){ S.drafts.delete(date); toast(d.status==='cancelled' ? 'Trénink označen jako zrušený' : 'Trénink uložen'); render(); }
+  else render();
+};
+$('#tDelete').onclick = e=> arm(e.currentTarget,'Opravdu smazat?',async()=>{
+  const date = S.date; if (await del('trainings',date)){ S.drafts.delete(date); toast('Trénink smazán'); render(); }
+});
+
+$('#addPlayer').addEventListener('submit', async e=>{
+  e.preventDefault(); const inp = $('#newName'); const name = inp.value.trim().replace(/\s+/g,' ');
+  if (!name) return;
+  if ([...S.players.values()].some(p=>norm(p.name)===norm(name))){ toast('Hráč s tímto jménem už existuje.'); return; }
+  if (await put('players',genId(),{name, active:true, createdAt:today()})){ inp.value=''; inp.focus(); toast(name+' přidán(a)'); }
+});
+$('#pSearch').addEventListener('input', e=>{ S.search = e.target.value; render(); });
+$('#pSort').addEventListener('change', e=>{ S.sort = e.target.value; render(); });
+$('#pArchived').addEventListener('change', e=>{ S.showArchived = e.target.checked; render(); });
+
+$('#cBack').onclick = ()=> setView('hraci');
+$('#cPay').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const amount = Number($('#cPayAmount').value); const date = $('#cPayDate').value;
+  if (!isFinite(amount) || amount===0){ toast('Zadej částku.'); return; }
+  if (!date){ toast('Zadej datum platby.'); return; }
+  const doc = {playerId:S.cardId, amount, date, note:$('#cPayNote').value.trim(), createdAt:new Date().toISOString()};
+  if (await put('payments',genId(),doc)){ $('#cPayNote').value=''; $('#cPayAmount').value = S.settings.defaultPayment||''; toast('Platba '+money(amount)+' uložena'); }
+});
+$('#cRename').addEventListener('submit', async e=>{
+  e.preventDefault(); const p = S.players.get(S.cardId); const name = $('#cName').value.trim().replace(/\s+/g,' ');
+  if (!p || !name || name===p.name) return;
+  if ([...S.players.values()].some(x=>x.id!==p.id && norm(x.name)===norm(name))){ toast('Hráč s tímto jménem už existuje.'); return; }
+  const data = Object.assign({},p,{name}); delete data.id;
+  if (await put('players',p.id,data)) toast('Jméno změněno');
+});
+$('#cArchive').onclick = async ()=>{
+  const p = S.players.get(S.cardId); if (!p) return;
+  const data = Object.assign({},p,{active: p.active===false}); delete data.id;
+  if (await put('players',p.id,data)) toast(data.active ? 'Hráč je zpět v týmu' : 'Hráč archivován');
+};
+$('#cDelete').onclick = e=> arm(e.currentTarget,'Opravdu smazat?',async()=>{
+  const id = S.cardId; if (await del('players',id)){ toast('Hráč smazán'); setView('hraci'); }
+});
+
+$('#addPrice').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const from = $('#npFrom').value; const price = Number($('#npPrice').value);
+  if (!from || !isFinite(price) || price<0){ toast('Zadej datum a cenu.'); return; }
+  const s = normSettings(S.settings); s.prices = s.prices.filter(p=>p.from!==from); s.prices.push({from,price});
+  if (await put('settings','main',s)){ $('#npPrice').value=''; toast('Cena '+money(price)+' platí od '+fmtDate(from)); }
+});
+$('#sDefault').addEventListener('change', async e=>{
+  const v = Number(e.target.value); if (!isFinite(v) || v<0) return;
+  const s = normSettings(S.settings); s.defaultPayment = v;
+  if (await put('settings','main',s)) toast('Výchozí platba uložena');
+});
+$('#sDays').addEventListener('change', async ()=>{
+  const s = normSettings(S.settings);
+  s.weekdays = $$('#sDays input:checked').map(i=>Number(i.value));
+  if (await put('settings','main',s)) toast('Dny tréninků uloženy');
+});
+
+/* ---------- auth ---------- */
+const toLogin = name => { const n = name.trim().toLowerCase(); return n.includes('@') ? n : n+'@'+LOGIN_DOMAIN; };
+const accountName = email => email && email.endsWith('@'+LOGIN_DOMAIN) ? email.slice(0, -LOGIN_DOMAIN.length-1) : email;
+$('#loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const name = $('#loginName').value; const pass = $('#loginPassword');
+  if (!name.trim() || !pass.value || !sb) return;
+  const btn = $('#loginBtn'); btn.disabled = true; setLoginMsg('Přihlašuji…', '');
+  try{
+    const {error} = await sb.auth.signInWithPassword({email:toLogin(name), password:pass.value});
+    // one message for unknown name and wrong password: don't reveal who has an account
+    if (!error){ setLoginMsg('', ''); pass.value = ''; }
+    else if (error.status===429) setLoginMsg('Příliš mnoho pokusů. Zkus to znovu za pár minut.', 'bad');
+    else if (error.status===400) setLoginMsg('Špatné jméno nebo heslo.', 'bad');
+    else setLoginMsg('Přihlášení se nepovedlo. Zkus to znovu.', 'bad');
+  }catch(_){ setLoginMsg('Přihlášení se nepovedlo. Zkontroluj připojení.', 'bad'); }
+  btn.disabled = false;
+});
+function setLoginMsg(text, kind){ const m = $('#loginMsg'); m.textContent = text; m.className = 'small'+(kind ? ' msg-'+kind : ''); }
+document.addEventListener('click', async ev=>{
+  if (!ev.target.closest('[data-logout]') || !sb) return;
+  await sb.auth.signOut();
+});
+
+let sessionEmail;
+async function onSession(session){
+  const email = session?.user?.email?.toLowerCase() || null;
+  if (email === sessionEmail) return; // token refresh, nothing changed
+  sessionEmail = email;
+  stopLive(); resetData();
+  S.email = email; S.role = null; S.readOnly = false;
+  if (!email){ S.mode = 'login'; render(); return; }
+  S.mode = 'connecting'; render();
+  const {data, error} = await sb.from('members').select('role').maybeSingle();
+  if (email !== sessionEmail) return; // signed out meanwhile
+  if (error){ S.mode = 'broken'; render(); return; }
+  if (!data){ S.mode = 'denied'; render(); return; }
+  S.role = data.role; S.readOnly = data.role!=='admin'; S.mode = 'db'; render();
+  startLive();
+  await loadAll();
+}
+
+/* ---------- boot ---------- */
+const h = (location.hash||'').slice(1);
+if (['trenink','hraci','prehled','nastaveni'].includes(h)) S.view = h;
+S.date = today();
+render();
+
+function goLocal(){
+  S.mode = 'local'; for (const k in S.loaded) S.loaded[k] = true;
+  S.date = defaultDate(); render();
+}
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden){ hiddenAt = Date.now(); return; }
+  // phones often drop the live connection in background; resync on return
+  if (S.mode==='db' && allLoaded() && Date.now()-hiddenAt > 30000) loadAll();
+});
+let userPicked = false;
+function pickStartDate(){ return userPicked ? S.date : defaultDate(); }
+$('#tDate').addEventListener('change', ()=>{ userPicked = true; });
+$('#dPrev').addEventListener('click', ()=>{ userPicked = true; });
+$('#dNext').addEventListener('click', ()=>{ userPicked = true; });
+
+(()=>{
+  const configured = !SUPABASE_URL.startsWith('YOUR_') && !SUPABASE_KEY.startsWith('YOUR_');
+  if (!configured || !window.supabase){ goLocal(); return; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{detectSessionInUrl:false}});
+  // defer: supabase must not be called from inside its own auth callback
+  sb.auth.onAuthStateChange((_event, session)=>{ setTimeout(()=>onSession(session), 0); });
+})();
+})();
+</script>
+</body>
+</html>
