@@ -90,13 +90,14 @@ h3{font-size:19px}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .toolbar .spacer{flex:1}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:6px}
 .grid.off{opacity:.4;pointer-events:none}
 .tile{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 4px;align-items:start;text-align:left;padding:8px;min-height:56px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s,border-color .12s,transform .08s}
 .tile:active{transform:scale(.97)}
-.tile .pill{font-size:12px;padding:1px 7px}
-.t-name{grid-column:1;font-weight:600;line-height:1.2;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-check{grid-column:2;grid-row:1/span 2;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center}
+.tile .pill{font-size:12px;padding:1px 7px;grid-row:2;grid-column:1;align-self:center}
+/* name gets the full tile width; check sits next to the balance */
+.t-name{grid-column:1/-1;font-weight:600;line-height:1.2;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-check{grid-column:2;grid-row:2;align-self:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center}
 .t-check svg{width:12px;height:12px}
 .t-check svg{opacity:0}
 .tile.sel{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
