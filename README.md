@@ -13,7 +13,7 @@ Docházka na volejbalové tréninky s předplatným. Víc správců, všichni vi
 - Trénink: výběr data, hromadné označení přítomných, typ (normální / zdarma / zrušený), poznámka
 - Hráči: přidání, hledání, řazení, archivace
 - Karta hráče: zůstatek, platby, historie s průběžným zůstatkem
-- Přehled: pokladna, dluhy, počet tréninků, průměrná účast
+- Přehled: **pokladna celkem** (skutečný stav peněz zadávaný ručně k datu, s historií – nezávislé na předplatném), kredit hráčů, dluhy, počet tréninků, průměrná účast
 - Nastavení: ceník s platností od data, výchozí platba, dny tréninků, účet / odhlášení
 
 ## Přístup
@@ -54,6 +54,7 @@ Každá tabulka má `id text`, `data jsonb`, `updated_at`:
 - `trainings` (id = `YYYY-MM-DD`): date, status (normal|free|cancelled), attendees[], note
 - `payments`: playerId, amount, date, note, createdAt
 - `settings` (id = `main`): prices[{from, price}], defaultPayment, weekdays[]
+- `settings` (id = `cash`): entries[{id, date, amount, note, createdAt}] – ruční stavy pokladny, nejnovější podle data je „Pokladna celkem“
 - `members`: email, role
 
 Zůstatek = součet plateb − součet cen tréninků (cena podle ceníku platného k datu tréninku).

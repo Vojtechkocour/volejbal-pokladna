@@ -179,6 +179,9 @@ h3{font-size:19px}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(10px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:30;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.cash-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.cash-hist summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--brand);padding:4px 0}
+.cash-hist .list{margin-top:8px}
 .gate{max-width:440px;margin:24px auto 0;width:100%}
 .gate p{margin:0}
 .msg-ok{color:var(--ok);font-weight:600}
@@ -324,6 +327,29 @@ h3{font-size:19px}
 
   <!-- PŘEHLED -->
   <section class="view" id="view-prehled" hidden>
+    <div class="panel">
+      <div class="cash-head">
+        <div class="balance" id="oCash"></div>
+        <button class="btn ghost small" id="cashOpen" type="button">Aktualizovat</button>
+      </div>
+      <form class="row-form" id="cashForm" hidden>
+        <label class="field grow">Stav pokladny (Kč)
+          <input class="input num" id="cashAmount" type="number" step="any" inputmode="decimal" required>
+        </label>
+        <label class="field grow">K datu
+          <input class="input" id="cashDate" type="date" required>
+        </label>
+        <label class="field" style="flex:1 1 100%">Poznámka
+          <input class="input" id="cashNote" maxlength="120" placeholder="např. hotovost + účet, zaplacený pronájem haly">
+        </label>
+        <div class="toolbar">
+          <button class="btn" type="submit">Uložit stav</button>
+          <button class="btn ghost" type="button" id="cashCancel">Zrušit</button>
+        </div>
+      </form>
+      <div class="small muted">Skutečný stav peněz, zadávaný ručně. Nemá vliv na předplatné ani zůstatky hráčů.</div>
+      <div id="oCashHist"></div>
+    </div>
     <div class="stats" id="oStats"></div>
     <h2>Kdo dluží nebo dochází kredit</h2>
     <div id="oDebt"></div>
@@ -409,9 +435,17 @@ const S = {
   settings:defaults(), loaded:{players:false,trainings:false,payments:false,settings:false},
   mode:'connecting', readOnly:false, view:'trenink', cardId:null, date:null,
   drafts:new Map(), showArchived:false, search:'', sort:'name',
-  email:null, role:null, live:null
+  email:null, role:null, live:null,
+  cash:[] // manual cashbox snapshots, stored as settings/cash {entries:[...]}
 };
 let sb = null;
+
+function normCash(d){
+  const list = d && Array.isArray(d.entries) ? d.entries : [];
+  return list.filter(e=>e && typeof e.date==='string' && isFinite(Number(e.amount)))
+    .map(e=>({id:String(e.id||e.createdAt||e.date), date:e.date, amount:Number(e.amount), note:String(e.note||''), createdAt:String(e.createdAt||'')}))
+    .sort((a,b)=> a.date<b.date?1:a.date>b.date?-1:(a.createdAt<b.createdAt?1:-1)); // newest first
+}
 
 function defaults(){ return {prices:[], defaultPayment:1000, weekdays:[]}; }
 function normSettings(d){
@@ -489,7 +523,7 @@ function arm(btn, label, fn){
 
 /* ---------- data layer ---------- */
 function applyLocal(col,id,data){
-  if (col==='settings'){ if (id==='main') S.settings = normSettings(data); }
+  if (col==='settings'){ if (id==='main') S.settings = normSettings(data); else if (id==='cash') S.cash = normCash(data); }
   else if (data===null) S[col].delete(id);
   else S[col].set(id,Object.assign({id},data));
 }
@@ -531,6 +565,7 @@ async function loadAll(){
     const toMap = rows => new Map(rows.map(r=>[r.id, Object.assign({id:r.id}, r.data)]));
     S.players = toMap(players); S.trainings = toMap(trainings); S.payments = toMap(payments);
     S.settings = normSettings(settings.find(r=>r.id==='main')?.data);
+    S.cash = normCash(settings.find(r=>r.id==='cash')?.data);
     const first = !allLoaded();
     for (const k in S.loaded) S.loaded[k] = true;
     refreshCleanDrafts();
@@ -567,7 +602,8 @@ function resetData(){
   S.settings = defaults(); S.drafts.clear();
   for (const k in S.loaded) S.loaded[k] = false;
   // hidden views would otherwise keep the previous user's data in the DOM
-  for (const sel of ['#tGrid','#pList','#cHead','#cBalance','#cFacts','#cHistory','#oStats','#oDebt','#oTrainings','#sPrices']) $(sel).innerHTML = '';
+  S.cash = [];
+  for (const sel of ['#tGrid','#pList','#cHead','#cBalance','#cFacts','#cHistory','#oCash','#oCashHist','#oStats','#oDebt','#oTrainings','#sPrices']) $(sel).innerHTML = '';
 }
 
 /* ---------- drafts (training selection) ---------- */
@@ -768,8 +804,31 @@ function renderCard(stats){
     : 'Archivovaný hráč se nezobrazuje při zapisování tréninku.';
 }
 
+function renderCash(){
+  const [cur, prev] = S.cash;
+  $('#cashOpen').hidden = S.readOnly || !$('#cashForm').hidden;
+  if (S.readOnly) $('#cashForm').hidden = true;
+  if (!cur){
+    $('#oCash').innerHTML = '<span class="small muted" style="font-weight:600">Pokladna celkem</span><span class="big">–</span><span class="small">Zatím nezadáno.'+(S.readOnly?'':' Klikni na Aktualizovat a zapiš, kolik máte.')+'</span>';
+  } else {
+    const diff = prev ? cur.amount - prev.amount : null;
+    $('#oCash').innerHTML = '<span class="small muted" style="font-weight:600">Pokladna celkem</span><span class="big">'+money(cur.amount)+'</span>'
+      +'<span class="small">stav k '+fmtDate(cur.date)+(cur.note?' · '+esc(cur.note):'')+'</span>'
+      +(diff!==null ? '<span class="small muted">od '+fmtDate(prev.date)+': '+(diff===0?'beze změny':signed(diff))+'</span>' : '');
+  }
+  const h = $('#oCashHist');
+  if (S.cash.length < 2){ h.innerHTML = ''; return; }
+  const open = h.querySelector('details')?.open ? ' open' : '';
+  h.innerHTML = '<details class="cash-hist"'+open+'><summary>Historie zápisů ('+S.cash.length+')</summary><div class="list">'
+    + S.cash.map(e=>'<div class="item static"><span class="i-main"><span class="i-name num">'+money(e.amount)+'</span>'
+      +'<span class="i-sub">'+fmtDate(e.date)+(e.note?' · '+esc(e.note):'')+'</span></span>'
+      +(S.readOnly?'':'<button class="x-btn" data-delcash="'+esc(e.id)+'">Smazat</button>')+'</div>').join('')
+    +'</div></details>';
+}
+
 function renderOverview(stats){
   if (!allLoaded()){ $('#oStats').innerHTML = '<div class="empty" style="grid-column:1/-1">Načítám…</div>'; return; }
+  renderCash();
   let bank = 0, debt = 0, debtors = 0;
   for (const e of stats.values()){ bank += e.balance; if (e.balance<0){ debt += -e.balance; debtors++; } }
   const held = [...S.trainings.values()].filter(t=>t.status!=='cancelled').sort((a,b)=>a.date<b.date?1:-1);
@@ -778,7 +837,7 @@ function renderOverview(stats){
   const avg = held.length ? held.reduce((s,t)=>s+(t.attendees||[]).length,0)/held.length : 0;
   const paidAll = [...S.payments.values()].reduce((s,p)=>s+(Number(p.amount)||0),0);
   $('#oStats').innerHTML =
-    '<div class="stat"><span class="lbl">V pokladně</span><span class="val">'+money(bank)+'</span><span class="sub">vybráno celkem '+money(paidAll)+'</span></div>'
+    '<div class="stat"><span class="lbl">Kredit hráčů</span><span class="val">'+money(bank)+'</span><span class="sub">z předplatného vybráno celkem '+money(paidAll)+'</span></div>'
    +'<div class="stat"><span class="lbl">Dluhy</span><span class="val'+(debt?' bad':'')+'">'+money(debt)+'</span><span class="sub">'+debtors+' '+plural(debtors,'hráč','hráči','hráčů')+' v mínusu</span></div>'
    +'<div class="stat"><span class="lbl">Tréninky</span><span class="val">'+held.length+'</span><span class="sub">tento měsíc '+inMonth+'</span></div>'
    +'<div class="stat"><span class="lbl">Průměrná účast</span><span class="val">'+nf.format(Math.round(avg*10)/10)+'</span><span class="sub">hráčů na trénink</span></div>';
@@ -839,6 +898,9 @@ document.addEventListener('click', ev=>{
   const dpr = ev.target.closest('[data-delprice]'); if (dpr){ arm(dpr,'Opravdu?',async()=>{
     const s = normSettings(S.settings); s.prices = s.prices.filter(p=>p.from!==dpr.dataset.delprice);
     if (await put('settings','main',s)) toast('Cena smazána, zůstatky přepočítány'); }); return; }
+  const dc = ev.target.closest('[data-delcash]'); if (dc){ arm(dc,'Opravdu?',async()=>{
+    const entries = S.cash.filter(e=>e.id!==dc.dataset.delcash);
+    if (await put('settings','cash',{entries})) toast('Zápis smazán'); }); return; }
   const card = ev.target.closest('[data-card]'); if (card){ openCard(card.dataset.card); return; }
   const tr = ev.target.closest('[data-train]'); if (tr){ openTraining(tr.dataset.train); return; }
 });
@@ -913,6 +975,23 @@ $('#sDays').addEventListener('change', async ()=>{
   const s = normSettings(S.settings);
   s.weekdays = $$('#sDays input:checked').map(i=>Number(i.value));
   if (await put('settings','main',s)) toast('Dny tréninků uloženy');
+});
+
+$('#cashOpen').onclick = ()=>{
+  $('#cashAmount').value = S.cash[0] ? S.cash[0].amount : '';
+  $('#cashDate').value = today(); $('#cashNote').value = '';
+  $('#cashForm').hidden = false; render(); $('#cashAmount').focus();
+};
+$('#cashCancel').onclick = ()=>{ $('#cashForm').hidden = true; render(); };
+$('#cashForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const amount = Number($('#cashAmount').value); const date = $('#cashDate').value;
+  if ($('#cashAmount').value==='' || !isFinite(amount)){ toast('Zadej částku.'); return; }
+  if (!date){ toast('Zadej datum.'); return; }
+  const entry = {id:genId(), date, amount, note:$('#cashNote').value.trim(), createdAt:new Date().toISOString()};
+  if (await put('settings','cash',{entries:[entry, ...S.cash]})){
+    $('#cashForm').hidden = true; toast('Pokladna: '+money(amount)+' k '+fmtDate(date)); render();
+  }
 });
 
 /* ---------- auth ---------- */
